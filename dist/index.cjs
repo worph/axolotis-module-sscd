@@ -4604,8 +4604,8 @@ var require_eventemitter3 = __commonJS({
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  AxBasicModule: () => AxBasicModule,
-  SSCDServiceID: () => SSCDServiceID
+  AxSSCDModule: () => AxSSCDModule,
+  SimpleCollisionDetectionName: () => SimpleCollisionDetectionName
 });
 module.exports = __toCommonJS(src_exports);
 var import_inversify = __toESM(require_inversify(), 1);
@@ -4661,16 +4661,13 @@ var SimpleCollisionDetection = class {
 };
 
 // src/Identifier.ts
-var SSCDServiceID = Symbol.for("SSCDServiceID");
+var SimpleCollisionDetectionName = Symbol.for("SimpleCollisionDetectionName");
 
 // src/index.ts
-var AxBasicModule = class {
+var AxSSCDModule = class {
   getModule() {
     return new import_inversify.ContainerModule((bind) => {
-      bind(SimpleCollisionDetection.name).toDynamicValue(() => {
-        return new SimpleCollisionDetection();
-      }).inSingletonScope();
-      bind(SSCDServiceID).toDynamicValue(() => {
+      bind(SimpleCollisionDetectionName).toDynamicValue(() => {
         return new SimpleCollisionDetection();
       }).inSingletonScope();
     });
@@ -4678,7 +4675,7 @@ var AxBasicModule = class {
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  AxBasicModule,
-  SSCDServiceID
+  AxSSCDModule,
+  SimpleCollisionDetectionName
 });
 //# sourceMappingURL=index.cjs.map

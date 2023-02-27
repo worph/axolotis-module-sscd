@@ -4650,23 +4650,20 @@ var SimpleCollisionDetection = class {
 };
 
 // src/Identifier.ts
-var SSCDServiceID = Symbol.for("SSCDServiceID");
+var SimpleCollisionDetectionName = Symbol.for("SimpleCollisionDetectionName");
 
 // src/index.ts
-var AxBasicModule = class {
+var AxSSCDModule = class {
   getModule() {
     return new import_inversify.ContainerModule((bind) => {
-      bind(SimpleCollisionDetection.name).toDynamicValue(() => {
-        return new SimpleCollisionDetection();
-      }).inSingletonScope();
-      bind(SSCDServiceID).toDynamicValue(() => {
+      bind(SimpleCollisionDetectionName).toDynamicValue(() => {
         return new SimpleCollisionDetection();
       }).inSingletonScope();
     });
   }
 };
 export {
-  AxBasicModule,
-  SSCDServiceID
+  AxSSCDModule,
+  SimpleCollisionDetectionName
 };
 //# sourceMappingURL=index.mjs.map

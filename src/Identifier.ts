@@ -1,1 +1,1 @@
-export const SSCDServiceID = Symbol.for("SSCDServiceID");
+export const SimpleCollisionDetectionName = Symbol.for("SimpleCollisionDetectionName");

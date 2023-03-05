@@ -1,5 +1,6 @@
 //import {sscd as SSCD} from 'sscd';
-declare const SSCD:any;
+import {SSCD} from '../src/sscd';
+//declare const SSCD:any;
 import {Point2} from "basictypes";
 import {EventEmitter} from "eventemitter3";
 

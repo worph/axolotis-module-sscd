@@ -7,7 +7,7 @@
 // @param source - starting position (vector)
 // @param dest - destination point from source (vector)
 // output line will be from source to dest, and when you move it you will actually move the source position.
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.Line = function(source, dest) {
 	// call init chain
@@ -30,12 +30,12 @@ SSCD.Line.prototype = {
 	// render (for debug purposes)
 	// @param ctx - 2d context of a canvas
 	// @param camera_pos - optional camera position to transform the render position
-	render: function(ctx, camera_pos) {
+	render: function(ctx) {
 
 		// draw the line
 		ctx.beginPath();
 		ctx.moveTo(this.__position.x, this.__position.y);
-		var dest = this.__position.add(this.__dest);
+		let dest = this.__position.add(this.__dest);
 		ctx.lineTo(dest.x, dest.y);
 
 		// draw stroke
@@ -47,10 +47,10 @@ SSCD.Line.prototype = {
 
 	// return axis-aligned-bounding-box
 	build_aabb: function() {
-		var pos = new SSCD.Vector(0, 0);
+		let pos = new SSCD.Vector(0, 0);
 		pos.x = this.__dest.x > 0 ? this.__position.x : this.__position.x + this.__dest.x;
 		pos.y = this.__dest.y > 0 ? this.__position.y : this.__position.y + this.__dest.y;
-		var size = this.__dest.apply(Math.abs);
+		let size = this.__dest.apply(Math.abs);
 		return new SSCD.AABB(pos, size);
 	},
 

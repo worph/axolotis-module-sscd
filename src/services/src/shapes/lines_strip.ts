@@ -7,7 +7,7 @@
 // @param position - starting position (vector)
 // @param points - list of vectors that will make the lines.
 // @param closed - if true, will create a line between last and first points. default to false.
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.LineStrip = function(position, points, closed) {
 	// call init chain
@@ -40,13 +40,13 @@ SSCD.LineStrip.prototype = {
 	// render (for debug purposes)
 	// @param ctx - 2d context of a canvas
 	// @param camera_pos - optional camera position to transform the render position
-	render: function(ctx, camera_pos) {
+	render: function(ctx) {
 
 		// draw the lines
-		var to = undefined;
+		let to = undefined;
 		ctx.beginPath();
-		for (var i = 0; i < this.__points.length - 1; ++i) {
-			var from = this.__position.add(this.__points[i]);
+		for (let i = 0; i < this.__points.length - 1; ++i) {
+			let from = this.__position.add(this.__points[i]);
 			to = this.__position.add(this.__points[i + 1]);
 			ctx.moveTo(from.x, from.y);
 			ctx.lineTo(to.x, to.y);
@@ -72,9 +72,9 @@ SSCD.LineStrip.prototype = {
 		}
 
 		// create list of lines
-		var points = this.get_abs_points();
-		var ret = [];
-		for (var i = 0; i < points.length - 1; i++) {
+		let points = this.get_abs_points();
+		let ret = [];
+		for (let i = 0; i < points.length - 1; i++) {
 			ret.push([points[i], points[i + 1]]);
 		}
 
@@ -91,8 +91,8 @@ SSCD.LineStrip.prototype = {
 		}
 
 		// convert points
-		var ret = [];
-		for (var i = 0; i < this.__points.length; i++) {
+		let ret = [];
+		for (let i = 0; i < this.__points.length; i++) {
 			ret.push(this.__points[i].add(this.__position));
 		}
 
@@ -115,8 +115,8 @@ SSCD.LineStrip.prototype = {
 
 	// return axis-aligned-bounding-box
 	build_aabb: function() {
-		var ret = new SSCD.AABB(SSCD.Vector.ZERO, SSCD.Vector.ZERO);
-		for (var i = 0; i < this.__points.length; ++i) {
+		let ret = new SSCD.AABB(SSCD.Vector.ZERO, SSCD.Vector.ZERO);
+		for (let i = 0; i < this.__points.length; ++i) {
 			ret.add_vector(this.__points[i]);
 		}
 		this.__aabb_offset_c = ret.position.clone();

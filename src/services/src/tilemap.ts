@@ -6,12 +6,12 @@
 // a collision world. you create an instance of this class and add bodies to it to check collision.
 // @param tile_size: size, in pixels, of a single tile
 // @param additional_params: extra params. see SSCD.World for more info.
-import {SSCD} from "./sscdNameSpace.js"
+import {SSCD} from "./sscdNameSpace"
 
 SSCD.TilemapWorld = function(tile_size, additional_params) {
 
 	// set defaults
-	var params = additional_params;
+	let params = additional_params;
 	params = params || {};
 	params.grid_size = tile_size;
 	this.__tiles = {};
@@ -27,7 +27,7 @@ SSCD.TilemapWorld.prototype = {
 	// @param tags - optional tags to apply on tile, if collision is set to true (note: null to reset tags).
 	set_tile: function(index, collision, tags) {
 		// if already have shape, get it
-		var shape = this.get_tile(index);
+		let shape = this.get_tile(index);
 
 		// if requested to remove the collision from this tile, do it
 		if (!collision) {
@@ -43,9 +43,9 @@ SSCD.TilemapWorld.prototype = {
 		// first, check if need to create new collision shape.
 		if (shape === undefined) {
 			// calc position and size of the shape
-			var tilesize = this.__params.grid_size;
-			var position = index.multiply_scalar(tilesize);
-			var size = new SSCD.Vector(tilesize, tilesize);
+			let tilesize = this.__params.grid_size;
+			let position = index.multiply_scalar(tilesize);
+			let size = new SSCD.Vector(tilesize, tilesize);
 
 			// create and add the shape
 			shape = this.__add_tile_shape(new SSCD.Rectangle(position, size), index);
@@ -68,7 +68,7 @@ SSCD.TilemapWorld.prototype = {
 		this.__grid[index.x][index.y] = this.__grid[index.x][index.y] || [];
 
 		// get current grid chunk
-		var curr_grid_chunk = this.__grid[index.x][index.y];
+		let curr_grid_chunk = this.__grid[index.x][index.y];
 
 		// add object to grid chunk
 		curr_grid_chunk.push(obj);
@@ -96,11 +96,11 @@ SSCD.TilemapWorld.prototype = {
 	// set tilemap from a matrix (array of arrays).
 	// @param matrix is the matrix to set, every 1 will be collision, every 0 will not collide. (note: true and false works too).
 	set_from_matrix: function(matrix) {
-		var index = new SSCD.Vector(0, 0);
-		for (var i = 0; i < matrix.length; ++i) {
+		let index = new SSCD.Vector(0, 0);
+		for (let i = 0; i < matrix.length; ++i) {
 			index.x = 0;
-			for (var j = 0; j < matrix[i].length; ++j) {
-				this.set_tile(index, matrix[i][j]);
+			for (let j = 0; j < matrix[i].length; ++j) {
+				this.set_tile(index, matrix[i][j],null);
 				index.x++;
 			}
 			index.y++;

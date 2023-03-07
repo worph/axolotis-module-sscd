@@ -4605,15 +4605,635 @@ var require_eventemitter3 = __commonJS({
 var src_exports = {};
 __export(src_exports, {
   AxSSCDModule: () => AxSSCDModule,
+  SimpleCollisionDetection: () => SimpleCollisionDetection,
   SimpleCollisionDetectionName: () => SimpleCollisionDetectionName
 });
 module.exports = __toCommonJS(src_exports);
 var import_inversify = __toESM(require_inversify(), 1);
 
-// src/services/src/sscdNameSpace.js
-var SSCD = SSCD || {};
+// src/services/src/sscdNameSpace.ts
+var SSCD = {};
 
-// src/services/src/shapes/capsule.js
+// src/services/src/world.ts
+SSCD.World = function(params) {
+  this.__init_world(params);
+};
+SSCD.World.prototype = {
+  __init_world: function(params) {
+    params = params || {};
+    params.grid_size = params.grid_size || 512;
+    params.grid_error = params.grid_error !== void 0 ? params.grid_error : 2;
+    this.__grid = {};
+    this.__params = params;
+    this.__all_shapes = {};
+    this.__collision_tags = {};
+    this.__next_coll_tag = 0;
+  },
+  __create_collision_tag: function(name) {
+    if (this.__collision_tags[name]) {
+      throw new SSCD.IllegalActionError("Collision tag named '" + name + "' already exist!");
+    }
+    this.__collision_tags[name] = 1 << this.__next_coll_tag++;
+  },
+  _ALL_TAGS_VAL: Number.MAX_SAFE_INTEGER || 4294967295,
+  cleanup: function() {
+    let rows = Object.keys(this.__grid);
+    for (let _i = 0; _i < rows.length; ++_i) {
+      let i = rows[_i];
+      let columns = Object.keys(this.__grid[i]);
+      for (let _j = 0; _j < columns.length; ++_j) {
+        let j = columns[_j];
+        if (this.__grid[i][j].length === 0) {
+          delete this.__grid[i][j];
+        }
+      }
+      if (Object.keys(this.__grid[i]).length === 0) {
+        delete this.__grid[i];
+      }
+    }
+  },
+  __get_tags_value: function(tags) {
+    if (tags === void 0) {
+      return this._ALL_TAGS_VAL;
+    }
+    if (typeof tags === "string") {
+      return this.__collision_tag(tags);
+    }
+    let ret = 0;
+    for (let i = 0; i < tags.length; ++i) {
+      ret |= this.__collision_tag(tags[i]);
+    }
+    return ret;
+  },
+  __collision_tag: function(name) {
+    if (this.__collision_tags[name] === void 0) {
+      this.__create_collision_tag(name);
+    }
+    return this.__collision_tags[name];
+  },
+  __get_grid_range: function(obj) {
+    let aabb = obj.get_aabb();
+    let min_i = Math.floor(aabb.position.x / this.__params.grid_size);
+    let min_j = Math.floor(aabb.position.y / this.__params.grid_size);
+    let max_i = Math.floor((aabb.position.x + aabb.size.x) / this.__params.grid_size);
+    let max_j = Math.floor((aabb.position.y + aabb.size.y) / this.__params.grid_size);
+    return {
+      min_x: min_i,
+      min_y: min_j,
+      max_x: max_i,
+      max_y: max_j
+    };
+  },
+  add: function(obj) {
+    if (obj.__world) {
+      throw new SSCD.IllegalActionError("Object to add is already in a collision world!");
+    }
+    let grids = this.__get_grid_range(obj);
+    for (let i = grids.min_x; i <= grids.max_x; ++i) {
+      for (let j = grids.min_y; j <= grids.max_y; ++j) {
+        this.__grid[i] = this.__grid[i] || {};
+        this.__grid[i][j] = this.__grid[i][j] || [];
+        let curr_grid_chunk = this.__grid[i][j];
+        curr_grid_chunk.push(obj);
+        obj.__grid_chunks.push(curr_grid_chunk);
+      }
+    }
+    obj.__world = this;
+    obj.__grid_bounderies = grids;
+    obj.__last_insert_aabb = obj.get_aabb().clone();
+    this.__all_shapes[obj.get_id()] = obj;
+    return obj;
+  },
+  get_all_shapes: function() {
+    let ret = [];
+    for (let key in this.__all_shapes) {
+      if (this.__all_shapes.hasOwnProperty(key)) {
+        ret.push(this.__all_shapes[key]);
+      }
+    }
+    return ret;
+  },
+  remove: function(obj) {
+    if (obj.__world !== this) {
+      throw new SSCD.IllegalActionError("Object to remove is not in this collision world!");
+    }
+    for (let i = 0; i < obj.__grid_chunks.length; ++i) {
+      let grid_chunk = obj.__grid_chunks[i];
+      for (let j = 0; j < grid_chunk.length; ++j) {
+        if (grid_chunk[j] === obj) {
+          grid_chunk.splice(j, 1);
+          break;
+        }
+      }
+    }
+    delete this.__all_shapes[obj.get_id()];
+    obj.__grid_chunks = [];
+    obj.__world = null;
+    obj.__grid_bounderies = null;
+    obj.__last_insert_aabb = null;
+  },
+  __update_shape_grid: function(obj) {
+    let curr_aabb = obj.get_aabb();
+    if (this.__params.grid_error === 0 || (Math.abs(curr_aabb.position.x - obj.__last_insert_aabb.position.x) > this.__params.grid_error || Math.abs(curr_aabb.position.y - obj.__last_insert_aabb.position.y) > this.__params.grid_error || Math.abs(curr_aabb.size.x - obj.__last_insert_aabb.size.x) > this.__params.grid_error || Math.abs(curr_aabb.size.y - obj.__last_insert_aabb.size.y) > this.__params.grid_error)) {
+      this.remove(obj);
+      this.add(obj);
+    }
+  },
+  pick_object: function(obj, collision_tags) {
+    let outlist = [];
+    if (this.test_collision(obj, collision_tags, outlist, 1)) {
+      return outlist[0];
+    }
+    return null;
+  },
+  test_collision: function(obj, collision_tags, out_list, ret_objs_count) {
+    collision_tags = this.__get_tags_value(collision_tags);
+    if (obj instanceof SSCD.Vector) {
+      return this.__test_collision_point(obj, collision_tags, out_list, ret_objs_count);
+    }
+    if (obj.is_shape) {
+      return this.__test_collision_shape(obj, collision_tags, out_list, ret_objs_count);
+    }
+  },
+  test_fov: function(position, distance, direction, fov_angle, collision_tags, out_list) {
+    collision_tags = this.__get_tags_value(collision_tags);
+    out_list = out_list || [];
+    let circle = new SSCD.Circle(position, distance);
+    this.__test_collision_shape(circle, collision_tags, out_list, null);
+    for (let i = out_list.length - 1; i >= 0; --i) {
+      let angle = position.angle_from(out_list[i].__position);
+      if (SSCD.Math.angles_dis(direction, angle) > fov_angle) {
+        out_list.splice(i, 1);
+      }
+    }
+    return out_list.length > 0;
+  },
+  __test_collision_point: function(vector, collision_tags_val, out_list, ret_objs_count) {
+    let grid_size = this.__params.grid_size;
+    let i = Math.floor(vector.x / grid_size);
+    let j = Math.floor(vector.y / grid_size);
+    if (this.__grid[i] === void 0 || this.__grid[i][j] === void 0) {
+      return false;
+    }
+    let grid_chunk = this.__grid[i][j];
+    let found = 0;
+    for (let i2 = 0; i2 < grid_chunk.length; ++i2) {
+      let curr_obj = grid_chunk[i2];
+      if (!curr_obj.collision_tags_match(collision_tags_val)) {
+        continue;
+      }
+      if (this.__do_collision(curr_obj, vector)) {
+        if (out_list) {
+          found++;
+          out_list.push(curr_obj);
+          if (ret_objs_count && found >= ret_objs_count) {
+            return true;
+          }
+        } else {
+          return true;
+        }
+      }
+    }
+    return found > 0;
+  },
+  __test_collision_shape: function(obj, collision_tags_val, out_list, ret_objs_count) {
+    let grid;
+    if (obj.__world === this) {
+      grid = obj.__grid_bounderies;
+    } else {
+      grid = this.__get_grid_range(obj);
+    }
+    let found = 0;
+    let already_tests = {};
+    for (let i = grid.min_x; i <= grid.max_x; ++i) {
+      if (this.__grid[i] === void 0) {
+        continue;
+      }
+      for (let j = grid.min_y; j <= grid.max_y; ++j) {
+        let curr_grid_chunk = this.__grid[i][j];
+        if (curr_grid_chunk === void 0) {
+          continue;
+        }
+        for (let x = 0; x < curr_grid_chunk.length; ++x) {
+          let curr_obj = curr_grid_chunk[x];
+          if (curr_obj === obj) {
+            continue;
+          }
+          if (already_tests[curr_obj.get_id()]) {
+            continue;
+          }
+          already_tests[curr_obj.get_id()] = true;
+          if (!curr_obj.collision_tags_match(collision_tags_val)) {
+            continue;
+          }
+          if (this.__do_collision(curr_obj, obj)) {
+            if (out_list) {
+              found++;
+              out_list.push(curr_obj);
+              if (ret_objs_count && found >= ret_objs_count) {
+                return true;
+              }
+            } else {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return found > 0;
+  },
+  __do_collision: function(src, target) {
+    return src.test_collide_with(target);
+  },
+  render: function(canvas, camera_pos, show_grid, show_aabb) {
+    camera_pos = camera_pos || SSCD.Vector.ZERO;
+    if (show_grid === void 0) {
+      show_grid = true;
+    }
+    if (show_aabb === void 0) {
+      show_aabb = true;
+    }
+    let ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    let grid_size = this.__params.grid_size;
+    let min_i = Math.floor(camera_pos.x / grid_size);
+    let min_j = Math.floor(camera_pos.y / grid_size);
+    let max_i = min_i + Math.ceil(canvas.width / grid_size);
+    let max_j = min_j + Math.ceil(canvas.height / grid_size);
+    let render_list = [];
+    for (let i = min_i; i <= max_i; ++i) {
+      for (let j = min_j; j <= max_j; ++j) {
+        let curr_grid_chunk = void 0;
+        if (this.__grid[i]) {
+          curr_grid_chunk = this.__grid[i][j];
+        }
+        if (show_grid) {
+          let position = new SSCD.Vector(i * grid_size, j * grid_size).sub_self(camera_pos);
+          ctx.beginPath();
+          ctx.rect(position.x, position.y, grid_size - 1, grid_size - 1);
+          ctx.lineWidth = "1";
+          if (curr_grid_chunk === void 0 || curr_grid_chunk.length === 0) {
+            ctx.strokeStyle = "rgba(100, 100, 100, 0.255)";
+          } else {
+            ctx.strokeStyle = "rgba(255, 0, 0, 0.3)";
+          }
+          ctx.stroke();
+        }
+        if (curr_grid_chunk === void 0) {
+          continue;
+        }
+        for (let x = 0; x < curr_grid_chunk.length; ++x) {
+          let curr_obj = curr_grid_chunk[x];
+          if (render_list.indexOf(curr_obj) === -1) {
+            render_list.push(curr_grid_chunk[x]);
+          }
+        }
+      }
+    }
+    for (let i = 0; i < render_list.length; ++i) {
+      render_list[i].render(ctx, camera_pos);
+      if (show_aabb) {
+        render_list[i].render_aabb(ctx, camera_pos);
+      }
+    }
+  }
+};
+SSCD.IllegalActionError = function(message) {
+  this.name = "Illegal Action";
+  this.message = message || "";
+};
+SSCD.IllegalActionError.prototype = Error.prototype;
+
+// src/services/src/utils/extend.ts
+SSCD.extend = function(base, child) {
+  for (let prop in base) {
+    if (child[prop])
+      continue;
+    child[prop] = base[prop];
+  }
+  child.__inits = child.__inits || [];
+  if (base.__init__) {
+    child.__inits.push(base.__init__);
+  }
+  child.init = function() {
+    for (let i = 0; i < this.__inits.length; ++i) {
+      this.__curr_init_func = this.__inits[i];
+      this.__curr_init_func();
+    }
+    delete this.__curr_init_func;
+  };
+};
+SSCD.NotImplementedError = function(message) {
+  this.name = "NotImplementedError";
+  this.message = message || "";
+};
+SSCD.NotImplementedError.prototype = Error.prototype;
+
+// src/services/src/shapes/shape.ts
+SSCD.Shape = function() {
+};
+SSCD.Shape.prototype = {
+  __type: "shape",
+  __collision_type: null,
+  is_shape: true,
+  __data: null,
+  __next_id: 0,
+  __collision_tags: [],
+  __collision_tags_val: SSCD.World.prototype._ALL_TAGS_VAL,
+  __init__: function() {
+    this.__position = new SSCD.Vector(0, 0);
+    this.__grid_chunks = [];
+    this.__world = null;
+    this.__grid_bounderies = null;
+    this.__last_insert_aabb = null;
+    this.__id = SSCD.Shape.prototype.__next_id++;
+  },
+  get_id: function() {
+    return this.__id;
+  },
+  set_collision_tags: function(tags) {
+    if (this.__world === null) {
+      throw new SSCD.IllegalActionError("Can't set tags for a shape that is not inside a collision world!");
+    }
+    if (tags === null) {
+      this.__collision_tags = [];
+      this.__collision_tags_val = SSCD.World.prototype._ALL_TAGS_VAL;
+    } else {
+      this.__collision_tags_val = this.__world.__get_tags_value(tags);
+      if (!(tags instanceof Array)) {
+        tags = [tags];
+      }
+      this.__collision_tags = tags;
+    }
+    if (this.__update_tags_hook) {
+      this.__update_tags_hook();
+    }
+    return this;
+  },
+  __update_tags_hook: null,
+  get_collision_tags: function() {
+    return this.__collision_tags;
+  },
+  collision_tags_match: function(tags) {
+    if (isNaN(tags)) {
+      if (this.__world === null) {
+        throw new SSCD.IllegalActionError("If you provide tags as string(s) the shape must be inside a collision world to convert them!");
+      }
+      tags = this.__world.__get_tags_value(tags);
+    }
+    return (this.__collision_tags_val & tags) !== 0;
+  },
+  test_collide_with: function(obj) {
+    return SSCD.CollisionManager.test_collision(this, obj);
+  },
+  repel: function(obj, force, iterations, factor_self, factor_other) {
+    force = force || 1;
+    iterations = iterations || 1;
+    if (factor_self === void 0)
+      factor_self = 0;
+    if (factor_other === void 0)
+      factor_other = 1;
+    let push_vector_other, push_vector_self;
+    let push_vector = this.get_repel_direction(obj).multiply_scalar_self(force);
+    if (factor_other)
+      push_vector_other = push_vector.multiply_scalar(factor_other);
+    if (factor_self)
+      push_vector_self = push_vector.multiply_scalar(factor_self * -1);
+    let ret = SSCD.Vector.ZERO.clone();
+    let collide = true;
+    while (collide && iterations > 0) {
+      iterations--;
+      if (push_vector_other)
+        obj.move(push_vector_other);
+      if (push_vector_self)
+        this.move(push_vector_self);
+      ret.add_self(push_vector);
+      collide = this.test_collide_with(obj);
+    }
+    return ret;
+  },
+  get_repel_direction: function(obj) {
+    let center = this.get_abs_center();
+    let other_center;
+    if (obj instanceof SSCD.Vector) {
+      other_center = obj;
+    } else {
+      other_center = obj.get_abs_center();
+    }
+    return other_center.sub(center).normalize_self();
+  },
+  __get_render_fill_color: function(opacity) {
+    if (this.__override_fill_color) {
+      return this.__override_fill_color;
+    }
+    return this.__collision_tags_to_color(this.__collision_tags_val, opacity);
+  },
+  __get_render_stroke_color: function(opacity) {
+    if (this.__override_stroke_color) {
+      return this.__override_stroke_color;
+    }
+    return this.__collision_tags_to_color(this.__collision_tags_val, opacity);
+  },
+  set_debug_render_colors: function(fill_color, stroke_color) {
+    this.__override_fill_color = fill_color;
+    this.__override_stroke_color = stroke_color;
+  },
+  __override_fill_color: null,
+  __override_stroke_color: null,
+  __collision_tags_to_color: function(tags, opacity) {
+    let r = Math.round(Math.abs(Math.sin(tags)) * 255);
+    let g = Math.round(Math.abs(Math.cos(tags)) * 255);
+    let b = Math.round(r ^ g);
+    return "rgba(" + r + "," + g + "," + b + "," + opacity + ")";
+  },
+  set_data: function(obj) {
+    this.__data = obj;
+    return this;
+  },
+  get_data: function() {
+    return this.__data;
+  },
+  get_name: function() {
+    return this.__type;
+  },
+  render_aabb: function(ctx, camera_pos) {
+    let box = this.get_aabb();
+    ctx.beginPath();
+    ctx.rect(box.position.x - camera_pos.x, box.position.y - camera_pos.y, box.size.x, box.size.y);
+    ctx.lineWidth = "1";
+    ctx.strokeStyle = "rgba(50, 175, 45, 0.5)";
+    ctx.stroke();
+  },
+  set_position: function(vector) {
+    this.__position.x = vector.x;
+    this.__position.y = vector.y;
+    this.__update_position();
+    return this;
+  },
+  get_position: function() {
+    return this.__position.clone();
+  },
+  move: function(vector) {
+    this.set_position(this.__position.add(vector));
+    return this;
+  },
+  __update_position: function() {
+    if (this.__update_position_hook) {
+      this.__update_position_hook();
+    }
+    if (this.__aabb) {
+      this.__update_aabb_pos();
+    }
+    this.__update_parent_world();
+  },
+  __update_aabb_pos: function() {
+    this.__aabb.position = this.__position;
+  },
+  get_abs_center: function() {
+    let aabb = this.get_aabb();
+    return aabb.position.add(aabb.size.multiply_scalar(0.5));
+  },
+  reset_aabb: function() {
+    this.__aabb = void 0;
+  },
+  __update_parent_world: function() {
+    if (this.__world) {
+      this.__world.__update_shape_grid(this);
+    }
+  },
+  __update_position_hook: null,
+  render: function() {
+    throw new SSCD.NotImplementedError("");
+  },
+  build_aabb: function() {
+    throw new SSCD.NotImplementedError("");
+  },
+  get_aabb: function() {
+    this.__aabb = this.__aabb || this.build_aabb();
+    return this.__aabb;
+  }
+};
+
+// src/services/src/shapes/composite_shape.ts
+SSCD.CompositeShape = function(position, objects) {
+  this.init();
+  this.__init_comp_shape(position, objects);
+};
+SSCD.CompositeShape.prototype = {
+  __type: "composite-shape",
+  __collision_type: "composite-shape",
+  __init_comp_shape: function(position, objects) {
+    this.__shapes = [];
+    position = position || SSCD.Vector.ZERO;
+    this.set_position(position);
+    if (objects) {
+      for (let i = 0; i < objects.length; ++i) {
+        this.add(objects[i]);
+      }
+    }
+  },
+  render: function(ctx, camera_pos) {
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      this.__shapes[i].shape.render(ctx, camera_pos);
+    }
+  },
+  repel: function(obj, force, iterations, factor_self, factor_other) {
+    let ret = SSCD.Vector.ZERO.clone();
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      let shape = this.__shapes[i].shape;
+      if (shape.test_collide_with(obj)) {
+        ret.add_self(shape.repel(obj, force, iterations, 0, factor_other));
+      }
+    }
+    if ((factor_self || 0) !== 0) {
+      this.move(ret.multiply_scalar(factor_self * -1));
+    }
+    return ret;
+  },
+  set_debug_render_colors: function(fill_color, stroke_color) {
+    this.__override_fill_color = fill_color;
+    this.__override_stroke_color = stroke_color;
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      this.__shapes[i].shape.set_debug_render_colors(fill_color, stroke_color);
+    }
+  },
+  get_shapes: function() {
+    if (this.__shapes_list_c) {
+      return this.__shapes_list_c;
+    }
+    let ret = [];
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      ret.push(this.__shapes[i].shape);
+    }
+    this.__shapes_list_c = ret;
+    return ret;
+  },
+  build_aabb: function() {
+    if (this.__shapes.length === 0) {
+      this.__aabb_pos_offset_c = SSCD.Vector.ZERO;
+      return new SSCD.AABB(SSCD.Vector.ZERO, SSCD.Vector.ZERO);
+    }
+    let ret = null;
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      let curr_aabb = this.__shapes[i].shape.get_aabb();
+      if (ret) {
+        ret.expand(curr_aabb);
+      } else {
+        ret = curr_aabb;
+      }
+    }
+    this.__aabb_pos_offset_c = ret.position.sub(this.__position);
+    return ret;
+  },
+  __update_aabb_pos: function() {
+    this.__aabb.position = this.__position.add(this.__aabb_pos_offset_c);
+  },
+  add: function(shape) {
+    if (shape.__world) {
+      throw new SSCD.IllegalActionError("Can't add shape with collision world to a composite shape!");
+    }
+    let offset = shape.__position;
+    this.__shapes_list_c = void 0;
+    this.__shapes.push({
+      shape,
+      offset: offset.clone()
+    });
+    shape.set_position(this.__position.add(offset));
+    this.reset_aabb();
+    this.__update_parent_world();
+    shape.__collision_tags_val = this.__collision_tags_val;
+    shape.__collision_tags = this.__collision_tags;
+    shape.__override_fill_color = this.__override_fill_color;
+    shape.__override_stroke_color = this.__override_stroke_color;
+    return shape;
+  },
+  __update_tags_hook: function() {
+    for (let i = 0; i < this.__shapes; ++i) {
+      let shape = this.__shapes[i].shape;
+      shape.__collision_tags_val = this.__collision_tags_val;
+      shape.__collision_tags = this.__collision_tags;
+    }
+  },
+  remove: function(shape) {
+    this.__shapes_list_c = void 0;
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      if (this.__shapes[i].shape === shape) {
+        this.__shapes.splice(i, 1);
+        this.__update_parent_world();
+        return;
+      }
+    }
+    throw new SSCD.IllegalActionError("Shape to remove is not in composite shape!");
+  },
+  __update_position_hook: function() {
+    for (let i = 0; i < this.__shapes.length; ++i) {
+      this.__shapes[i].shape.set_position(this.__position.add(this.__shapes[i].offset));
+    }
+  }
+};
+SSCD.extend(SSCD.Shape.prototype, SSCD.CompositeShape.prototype);
+
+// src/services/src/shapes/capsule.ts
 SSCD.Capsule = function(position, size, standing) {
   this.init();
   if (standing === void 0)
@@ -4639,7 +5259,7 @@ SSCD.Capsule.prototype = {
 };
 SSCD.extend(SSCD.CompositeShape.prototype, SSCD.Capsule.prototype);
 
-// src/services/src/shapes/circle.js
+// src/services/src/shapes/circle.ts
 SSCD.Circle = function(position, radius) {
   this.init();
   this.__radius = radius;
@@ -4650,7 +5270,7 @@ SSCD.Circle.prototype = {
   __type: "circle",
   __collision_type: "circle",
   render: function(ctx, camera_pos) {
-    var position = this.__position.sub(camera_pos);
+    let position = this.__position.sub(camera_pos);
     ctx.beginPath();
     ctx.arc(position.x, position.y, this.__radius, 0, 2 * Math.PI, false);
     ctx.lineWidth = "7";
@@ -4674,126 +5294,7 @@ SSCD.Circle.prototype = {
 };
 SSCD.extend(SSCD.Shape.prototype, SSCD.Circle.prototype);
 
-// src/services/src/shapes/composite_shape.js
-SSCD.CompositeShape = function(position, objects) {
-  this.init();
-  this.__init_comp_shape(position, objects);
-};
-SSCD.CompositeShape.prototype = {
-  __type: "composite-shape",
-  __collision_type: "composite-shape",
-  __init_comp_shape: function(position, objects) {
-    this.__shapes = [];
-    position = position || SSCD.Vector.ZERO;
-    this.set_position(position);
-    if (objects) {
-      for (var i = 0; i < objects.length; ++i) {
-        this.add(objects[i]);
-      }
-    }
-  },
-  render: function(ctx, camera_pos) {
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      this.__shapes[i].shape.render(ctx, camera_pos);
-    }
-  },
-  repel: function(obj, force, iterations, factor_self, factor_other) {
-    var ret = SSCD.Vector.ZERO.clone();
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      var shape = this.__shapes[i].shape;
-      if (shape.test_collide_with(obj)) {
-        ret.add_self(shape.repel(obj, force, iterations, 0, factor_other));
-      }
-    }
-    if ((factor_self || 0) !== 0) {
-      this.move(ret.multiply_scalar(factor_self * -1));
-    }
-    return ret;
-  },
-  set_debug_render_colors: function(fill_color, stroke_color) {
-    this.__override_fill_color = fill_color;
-    this.__override_stroke_color = stroke_color;
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      this.__shapes[i].shape.set_debug_render_colors(fill_color, stroke_color);
-    }
-  },
-  get_shapes: function() {
-    if (this.__shapes_list_c) {
-      return this.__shapes_list_c;
-    }
-    var ret = [];
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      ret.push(this.__shapes[i].shape);
-    }
-    this.__shapes_list_c = ret;
-    return ret;
-  },
-  build_aabb: function() {
-    if (this.__shapes.length === 0) {
-      this.__aabb_pos_offset_c = SSCD.Vector.ZERO;
-      return new SSCD.AABB(SSCD.Vector.ZERO, SSCD.Vector.ZERO);
-    }
-    var ret = null;
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      var curr_aabb = this.__shapes[i].shape.get_aabb();
-      if (ret) {
-        ret.expand(curr_aabb);
-      } else {
-        ret = curr_aabb;
-      }
-    }
-    this.__aabb_pos_offset_c = ret.position.sub(this.__position);
-    return ret;
-  },
-  __update_aabb_pos: function() {
-    this.__aabb.position = this.__position.add(this.__aabb_pos_offset_c);
-  },
-  add: function(shape) {
-    if (shape.__world) {
-      throw new SSCD.IllegalActionError("Can't add shape with collision world to a composite shape!");
-    }
-    var offset = shape.__position;
-    this.__shapes_list_c = void 0;
-    this.__shapes.push({
-      shape,
-      offset: offset.clone()
-    });
-    shape.set_position(this.__position.add(offset));
-    this.reset_aabb();
-    this.__update_parent_world();
-    shape.__collision_tags_val = this.__collision_tags_val;
-    shape.__collision_tags = this.__collision_tags;
-    shape.__override_fill_color = this.__override_fill_color;
-    shape.__override_stroke_color = this.__override_stroke_color;
-    return shape;
-  },
-  __update_tags_hook: function() {
-    for (var i = 0; i < this.__shapes; ++i) {
-      var shape = this.__shapes[i].shape;
-      shape.__collision_tags_val = this.__collision_tags_val;
-      shape.__collision_tags = this.__collision_tags;
-    }
-  },
-  remove: function(shape) {
-    this.__shapes_list_c = void 0;
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      if (this.__shapes[i].shape === shape) {
-        this.__shapes.splice(i, 1);
-        this.__update_parent_world();
-        return;
-      }
-    }
-    throw new SSCD.IllegalActionError("Shape to remove is not in composite shape!");
-  },
-  __update_position_hook: function() {
-    for (var i = 0; i < this.__shapes.length; ++i) {
-      this.__shapes[i].shape.set_position(this.__position.add(this.__shapes[i].offset));
-    }
-  }
-};
-SSCD.extend(SSCD.Shape.prototype, SSCD.CompositeShape.prototype);
-
-// src/services/src/shapes/line.js
+// src/services/src/shapes/line.ts
 SSCD.Line = function(source, dest) {
   this.init();
   this.__dest = dest;
@@ -4802,20 +5303,20 @@ SSCD.Line = function(source, dest) {
 SSCD.Line.prototype = {
   __type: "line",
   __collision_type: "line",
-  render: function(ctx, camera_pos) {
+  render: function(ctx) {
     ctx.beginPath();
     ctx.moveTo(this.__position.x, this.__position.y);
-    var dest = this.__position.add(this.__dest);
+    let dest = this.__position.add(this.__dest);
     ctx.lineTo(dest.x, dest.y);
     ctx.lineWidth = "7";
     ctx.strokeStyle = this.__get_render_stroke_color(0.75);
     ctx.stroke();
   },
   build_aabb: function() {
-    var pos = new SSCD.Vector(0, 0);
+    let pos = new SSCD.Vector(0, 0);
     pos.x = this.__dest.x > 0 ? this.__position.x : this.__position.x + this.__dest.x;
     pos.y = this.__dest.y > 0 ? this.__position.y : this.__position.y + this.__dest.y;
-    var size = this.__dest.apply(Math.abs);
+    let size = this.__dest.apply(Math.abs);
     return new SSCD.AABB(pos, size);
   },
   get_p1: function() {
@@ -4833,7 +5334,7 @@ SSCD.Line.prototype = {
 };
 SSCD.extend(SSCD.Shape.prototype, SSCD.Line.prototype);
 
-// src/services/src/shapes/lines_strip.js
+// src/services/src/shapes/lines_strip.ts
 SSCD.LineStrip = function(position, points, closed) {
   this.init();
   this.__points = points;
@@ -4848,11 +5349,11 @@ SSCD.LineStrip = function(position, points, closed) {
 SSCD.LineStrip.prototype = {
   __type: "line-strip",
   __collision_type: "line-strip",
-  render: function(ctx, camera_pos) {
-    var to = void 0;
+  render: function(ctx) {
+    let to = void 0;
     ctx.beginPath();
-    for (var i = 0; i < this.__points.length - 1; ++i) {
-      var from = this.__position.add(this.__points[i]);
+    for (let i = 0; i < this.__points.length - 1; ++i) {
+      let from = this.__position.add(this.__points[i]);
       to = this.__position.add(this.__points[i + 1]);
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
@@ -4868,9 +5369,9 @@ SSCD.LineStrip.prototype = {
     if (this.__abs_lines_c) {
       return this.__abs_lines_c;
     }
-    var points = this.get_abs_points();
-    var ret = [];
-    for (var i = 0; i < points.length - 1; i++) {
+    let points = this.get_abs_points();
+    let ret = [];
+    for (let i = 0; i < points.length - 1; i++) {
       ret.push([points[i], points[i + 1]]);
     }
     this.__abs_lines_c = ret;
@@ -4880,8 +5381,8 @@ SSCD.LineStrip.prototype = {
     if (this.__abs_points_c) {
       return this.__abs_points_c;
     }
-    var ret = [];
-    for (var i = 0; i < this.__points.length; i++) {
+    let ret = [];
+    for (let i = 0; i < this.__points.length; i++) {
       ret.push(this.__points[i].add(this.__position));
     }
     this.__abs_points_c = ret;
@@ -4895,8 +5396,8 @@ SSCD.LineStrip.prototype = {
     this.__aabb.position.set(this.__aabb_offset_c.add(this.__position));
   },
   build_aabb: function() {
-    var ret = new SSCD.AABB(SSCD.Vector.ZERO, SSCD.Vector.ZERO);
-    for (var i = 0; i < this.__points.length; ++i) {
+    let ret = new SSCD.AABB(SSCD.Vector.ZERO, SSCD.Vector.ZERO);
+    for (let i = 0; i < this.__points.length; ++i) {
       ret.add_vector(this.__points[i]);
     }
     this.__aabb_offset_c = ret.position.clone();
@@ -4906,7 +5407,7 @@ SSCD.LineStrip.prototype = {
 };
 SSCD.extend(SSCD.Shape.prototype, SSCD.LineStrip.prototype);
 
-// src/services/src/shapes/rectangle.js
+// src/services/src/shapes/rectangle.ts
 SSCD.Rectangle = function(position, size) {
   this.init();
   this.__size = size;
@@ -4916,7 +5417,7 @@ SSCD.Rectangle.prototype = {
   __type: "rectangle",
   __collision_type: "rectangle",
   render: function(ctx, camera_pos) {
-    var position = this.__position.sub(camera_pos);
+    let position = this.__position.sub(camera_pos);
     ctx.beginPath();
     ctx.rect(position.x, position.y, this.__size.x, this.__size.y);
     ctx.lineWidth = "7";
@@ -4961,192 +5462,7 @@ SSCD.Rectangle.prototype = {
 };
 SSCD.extend(SSCD.Shape.prototype, SSCD.Rectangle.prototype);
 
-// src/services/src/shapes/shape.js
-SSCD.Shape = function() {
-};
-SSCD.Shape.prototype = {
-  __type: "shape",
-  __collision_type: null,
-  is_shape: true,
-  __data: null,
-  __next_id: 0,
-  __collision_tags: [],
-  __collision_tags_val: SSCD.World.prototype._ALL_TAGS_VAL,
-  __init__: function() {
-    this.__position = new SSCD.Vector();
-    this.__grid_chunks = [];
-    this.__world = null;
-    this.__grid_bounderies = null;
-    this.__last_insert_aabb = null;
-    this.__id = SSCD.Shape.prototype.__next_id++;
-  },
-  get_id: function() {
-    return this.__id;
-  },
-  set_collision_tags: function(tags) {
-    if (this.__world === null) {
-      throw new SSCD.IllegalActionError("Can't set tags for a shape that is not inside a collision world!");
-    }
-    if (tags === null) {
-      this.__collision_tags = [];
-      this.__collision_tags_val = SSCD.World.prototype._ALL_TAGS_VAL;
-    } else {
-      this.__collision_tags_val = this.__world.__get_tags_value(tags);
-      if (!(tags instanceof Array)) {
-        tags = [tags];
-      }
-      this.__collision_tags = tags;
-    }
-    if (this.__update_tags_hook) {
-      this.__update_tags_hook();
-    }
-    return this;
-  },
-  __update_tags_hook: null,
-  get_collision_tags: function(tags) {
-    return this.__collision_tags;
-  },
-  collision_tags_match: function(tags) {
-    if (isNaN(tags)) {
-      if (this.__world === null) {
-        throw new SSCD.IllegalActionError("If you provide tags as string(s) the shape must be inside a collision world to convert them!");
-      }
-      tags = this.__world.__get_tags_value(tags);
-    }
-    return (this.__collision_tags_val & tags) !== 0;
-  },
-  test_collide_with: function(obj) {
-    return SSCD.CollisionManager.test_collision(this, obj);
-  },
-  repel: function(obj, force, iterations, factor_self, factor_other) {
-    force = force || 1;
-    iterations = iterations || 1;
-    if (factor_self === void 0)
-      factor_self = 0;
-    if (factor_other === void 0)
-      factor_other = 1;
-    var push_vector_other, push_vector_self;
-    var push_vector = this.get_repel_direction(obj).multiply_scalar_self(force);
-    if (factor_other)
-      push_vector_other = push_vector.multiply_scalar(factor_other);
-    if (factor_self)
-      push_vector_self = push_vector.multiply_scalar(factor_self * -1);
-    var ret = SSCD.Vector.ZERO.clone();
-    var collide = true;
-    while (collide && iterations > 0) {
-      iterations--;
-      if (push_vector_other)
-        obj.move(push_vector_other);
-      if (push_vector_self)
-        this.move(push_vector_self);
-      ret.add_self(push_vector);
-      collide = this.test_collide_with(obj);
-    }
-    return ret;
-  },
-  get_repel_direction: function(obj) {
-    var center = this.get_abs_center();
-    var other_center;
-    if (obj instanceof SSCD.Vector) {
-      other_center = obj;
-    } else {
-      other_center = obj.get_abs_center();
-    }
-    return other_center.sub(center).normalize_self();
-  },
-  __get_render_fill_color: function(opacity) {
-    if (this.__override_fill_color) {
-      return this.__override_fill_color;
-    }
-    return this.__collision_tags_to_color(this.__collision_tags_val, opacity);
-  },
-  __get_render_stroke_color: function(opacity) {
-    if (this.__override_stroke_color) {
-      return this.__override_stroke_color;
-    }
-    return this.__collision_tags_to_color(this.__collision_tags_val, opacity);
-  },
-  set_debug_render_colors: function(fill_color, stroke_color) {
-    this.__override_fill_color = fill_color;
-    this.__override_stroke_color = stroke_color;
-  },
-  __override_fill_color: null,
-  __override_stroke_color: null,
-  __collision_tags_to_color: function(tags, opacity) {
-    var r = Math.round(Math.abs(Math.sin(tags)) * 255);
-    var g = Math.round(Math.abs(Math.cos(tags)) * 255);
-    var b = Math.round(r ^ g);
-    return "rgba(" + r + "," + g + "," + b + "," + opacity + ")";
-  },
-  set_data: function(obj) {
-    this.__data = obj;
-    return this;
-  },
-  get_data: function() {
-    return this.__data;
-  },
-  get_name: function() {
-    return this.__type;
-  },
-  render_aabb: function(ctx, camera_pos) {
-    var box = this.get_aabb();
-    ctx.beginPath();
-    ctx.rect(box.position.x - camera_pos.x, box.position.y - camera_pos.y, box.size.x, box.size.y);
-    ctx.lineWidth = "1";
-    ctx.strokeStyle = "rgba(50, 175, 45, 0.5)";
-    ctx.stroke();
-  },
-  set_position: function(vector) {
-    this.__position.x = vector.x;
-    this.__position.y = vector.y;
-    this.__update_position();
-    return this;
-  },
-  get_position: function() {
-    return this.__position.clone();
-  },
-  move: function(vector) {
-    this.set_position(this.__position.add(vector));
-    return this;
-  },
-  __update_position: function() {
-    if (this.__update_position_hook) {
-      this.__update_position_hook();
-    }
-    if (this.__aabb) {
-      this.__update_aabb_pos();
-    }
-    this.__update_parent_world();
-  },
-  __update_aabb_pos: function() {
-    this.__aabb.position = this.__position;
-  },
-  get_abs_center: function() {
-    var aabb = this.get_aabb();
-    return aabb.position.add(aabb.size.multiply_scalar(0.5));
-  },
-  reset_aabb: function() {
-    this.__aabb = void 0;
-  },
-  __update_parent_world: function() {
-    if (this.__world) {
-      this.__world.__update_shape_grid(this);
-    }
-  },
-  __update_position_hook: null,
-  render: function(ctx, camera_pos) {
-    throw new SSCD.NotImplementedError();
-  },
-  build_aabb: function() {
-    throw new SSCD.NotImplementedError();
-  },
-  get_aabb: function() {
-    this.__aabb = this.__aabb || this.build_aabb();
-    return this.__aabb;
-  }
-};
-
-// src/services/src/shapes/shapes_collider.js
+// src/services/src/shapes/shapes_collider.ts
 SSCD.CollisionManager = {
   test_collision: function(a, b) {
     if (a instanceof SSCD.Vector && b instanceof SSCD.Vector) {
@@ -5248,8 +5564,8 @@ SSCD.CollisionManager = {
     return SSCD.Math.is_on_line(v, line.get_p1(), line.get_p2());
   },
   _test_collision_vector_linestrip: function(v, linestrip) {
-    var lines = linestrip.get_abs_lines();
-    for (var i = 0; i < lines.length; ++i) {
+    let lines = linestrip.get_abs_lines();
+    for (let i = 0; i < lines.length; ++i) {
       if (SSCD.Math.is_on_line(v, lines[i][0], lines[i][1])) {
         return true;
       }
@@ -5260,8 +5576,8 @@ SSCD.CollisionManager = {
     return SSCD.Math.distance_to_line(circle.__position, line.get_p1(), line.get_p2()) <= circle.__radius;
   },
   _test_collision_circle_linestrip: function(circle, linestrip) {
-    var lines = linestrip.get_abs_lines();
-    for (var i = 0; i < lines.length; ++i) {
+    let lines = linestrip.get_abs_lines();
+    for (let i = 0; i < lines.length; ++i) {
       if (SSCD.Math.distance_to_line(circle.__position, lines[i][0], lines[i][1]) <= circle.__radius) {
         return true;
       }
@@ -5269,9 +5585,9 @@ SSCD.CollisionManager = {
     return false;
   },
   _test_collision_linestrip_line: function(linestrip, line) {
-    var lines = linestrip.get_abs_lines();
-    var p1 = line.get_p1(), p2 = line.get_p2();
-    for (var i = 0; i < lines.length; ++i) {
+    let lines = linestrip.get_abs_lines();
+    let p1 = line.get_p1(), p2 = line.get_p2();
+    for (let i = 0; i < lines.length; ++i) {
       if (SSCD.Math.line_intersects(p1, p2, lines[i][0], lines[i][1])) {
         return true;
       }
@@ -5287,18 +5603,18 @@ SSCD.CollisionManager = {
     );
   },
   _test_collision_rect_line: function(rect, line) {
-    var p1 = line.get_p1();
-    var p2 = line.get_p2();
+    let p1 = line.get_p1();
+    let p2 = line.get_p2();
     if (SSCD.CollisionManager._test_collision_rect_vector(rect, p1) || SSCD.CollisionManager._test_collision_rect_vector(rect, p2)) {
       return true;
     }
-    var r1 = rect.get_top_left();
-    var r2 = rect.get_bottom_left();
+    let r1 = rect.get_top_left();
+    let r2 = rect.get_bottom_left();
     if (SSCD.Math.line_intersects(p1, p2, r1, r2)) {
       return true;
     }
-    var r3 = rect.get_top_right();
-    var r4 = rect.get_bottom_right();
+    let r3 = rect.get_top_right();
+    let r4 = rect.get_bottom_right();
     if (SSCD.Math.line_intersects(p1, p2, r3, r4)) {
       return true;
     }
@@ -5311,20 +5627,20 @@ SSCD.CollisionManager = {
     return false;
   },
   _test_collision_rect_linestrip: function(rect, linesstrip) {
-    var points = linesstrip.get_abs_points();
-    for (var i = 0; i < points.length; ++i) {
+    let points = linesstrip.get_abs_points();
+    for (let i = 0; i < points.length; ++i) {
       if (this._test_collision_rect_vector(rect, points[i])) {
         return true;
       }
     }
-    var r1 = rect.get_top_left();
-    var r2 = rect.get_bottom_left();
-    var r3 = rect.get_top_right();
-    var r4 = rect.get_bottom_right();
-    var lines = linesstrip.get_abs_lines();
-    for (var i = 0; i < lines.length; ++i) {
-      var p1 = lines[i][0];
-      var p2 = lines[i][1];
+    let r1 = rect.get_top_left();
+    let r2 = rect.get_bottom_left();
+    let r3 = rect.get_top_right();
+    let r4 = rect.get_bottom_right();
+    let lines = linesstrip.get_abs_lines();
+    for (let i = 0; i < lines.length; ++i) {
+      let p1 = lines[i][0];
+      let p2 = lines[i][1];
       if (SSCD.Math.line_intersects(p1, p2, r1, r2)) {
         return true;
       }
@@ -5341,10 +5657,10 @@ SSCD.CollisionManager = {
     return false;
   },
   _test_collision_linestrip_linestrip: function(strip1, strip2) {
-    var lines1 = strip1.get_abs_lines();
-    var lines2 = strip2.get_abs_lines();
-    for (var i = 0; i < lines1.length; ++i) {
-      for (var j = 0; j < lines2.length; ++j) {
+    let lines1 = strip1.get_abs_lines();
+    let lines2 = strip2.get_abs_lines();
+    for (let i = 0; i < lines1.length; ++i) {
+      for (let j = 0; j < lines2.length; ++j) {
         if (SSCD.Math.line_intersects(
           lines1[i][0],
           lines1[i][1],
@@ -5358,18 +5674,18 @@ SSCD.CollisionManager = {
     return false;
   },
   _test_collision_composite_shape: function(composite, other) {
-    var comp_shapes = composite.get_shapes();
+    let comp_shapes = composite.get_shapes();
     if (other.__collision_type == "composite-shape") {
-      var other_shapes = other.get_shapes();
-      for (var i = 0; i < comp_shapes.length; ++i) {
-        for (var j = 0; j < other_shapes.length; ++j) {
+      let other_shapes = other.get_shapes();
+      for (let i = 0; i < comp_shapes.length; ++i) {
+        for (let j = 0; j < other_shapes.length; ++j) {
           if (SSCD.CollisionManager.test_collision(comp_shapes[i], other_shapes[j])) {
             return true;
           }
         }
       }
     } else {
-      for (var i = 0; i < comp_shapes.length; ++i) {
+      for (let i = 0; i < comp_shapes.length; ++i) {
         if (SSCD.CollisionManager.test_collision(comp_shapes[i], other)) {
           return true;
         }
@@ -5378,17 +5694,17 @@ SSCD.CollisionManager = {
     return false;
   },
   _test_collision_circle_rect: function(circle, rect) {
-    var circle_pos = circle.__position;
-    var collide = SSCD.CollisionManager._test_collision_rect_vector(rect, circle_pos);
+    let circle_pos = circle.__position;
+    let collide = SSCD.CollisionManager._test_collision_rect_vector(rect, circle_pos);
     if (collide) {
       return true;
     }
-    var rect_center = rect.get_abs_center();
-    var collide = SSCD.CollisionManager._test_collision_circle_vector(circle, rect_center);
+    let rect_center = rect.get_abs_center();
+    collide = SSCD.CollisionManager._test_collision_circle_vector(circle, rect_center);
     if (collide) {
       return true;
     }
-    var lines = [];
+    let lines = [];
     if (rect_center.x > circle_pos.x) {
       lines.push([rect.get_top_left(), rect.get_bottom_left()]);
     } else {
@@ -5399,8 +5715,8 @@ SSCD.CollisionManager = {
     } else {
       lines.push([rect.get_bottom_left(), rect.get_bottom_right()]);
     }
-    for (var i = 0; i < lines.length; ++i) {
-      var dist_to_line = SSCD.Math.distance_to_line(circle_pos, lines[i][0], lines[i][1]);
+    for (let i = 0; i < lines.length; ++i) {
+      let dist_to_line = SSCD.Math.distance_to_line(circle_pos, lines[i][0], lines[i][1]);
       if (dist_to_line <= circle.__radius) {
         return true;
       }
@@ -5408,13 +5724,13 @@ SSCD.CollisionManager = {
     return false;
   },
   _test_collision_rect_rect: function(a, b) {
-    var r1 = {
+    let r1 = {
       left: a.__position.x,
       right: a.__position.x + a.__size.x,
       top: a.__position.y,
       bottom: a.__position.y + a.__size.y
     };
-    var r2 = {
+    let r2 = {
       left: b.__position.x,
       right: b.__position.x + b.__size.x,
       top: b.__position.y,
@@ -5429,38 +5745,38 @@ SSCD.UnsupportedShapes = function(a, b) {
 };
 SSCD.UnsupportedShapes.prototype = Error.prototype;
 
-// src/services/src/utils/aabb.js
+// src/services/src/utils/aabb.ts
 SSCD.AABB = function(position, size) {
   this.position = position.clone();
   this.size = size.clone();
 };
 SSCD.AABB.prototype = {
   expand: function(other) {
-    var min_x = Math.min(this.position.x, other.position.x);
-    var min_y = Math.min(this.position.y, other.position.y);
-    var max_x = Math.max(this.position.x + this.size.x, other.position.x + other.size.x);
-    var max_y = Math.max(this.position.y + this.size.y, other.position.y + other.size.y);
+    let min_x = Math.min(this.position.x, other.position.x);
+    let min_y = Math.min(this.position.y, other.position.y);
+    let max_x = Math.max(this.position.x + this.size.x, other.position.x + other.size.x);
+    let max_y = Math.max(this.position.y + this.size.y, other.position.y + other.size.y);
     this.position.x = min_x;
     this.position.y = min_y;
     this.size.x = max_x - min_x;
     this.size.y = max_y - min_y;
   },
   add_vector: function(vector) {
-    var push_pos_x = this.position.x - vector.x;
+    let push_pos_x = this.position.x - vector.x;
     if (push_pos_x > 0) {
       this.position.x -= push_pos_x;
       this.size.x += push_pos_x;
     }
-    var push_pos_y = this.position.y - vector.y;
+    let push_pos_y = this.position.y - vector.y;
     if (push_pos_y > 0) {
       this.position.y -= push_pos_y;
       this.size.y += push_pos_y;
     }
-    var push_size_x = vector.x - (this.position.x + this.size.x);
+    let push_size_x = vector.x - (this.position.x + this.size.x);
     if (push_size_x > 0) {
       this.size.x += push_size_x;
     }
-    var push_size_y = vector.y - (this.position.y + this.size.y);
+    let push_size_y = vector.y - (this.position.y + this.size.y);
     if (push_size_y > 0) {
       this.size.y += push_size_y;
     }
@@ -5470,32 +5786,7 @@ SSCD.AABB.prototype = {
   }
 };
 
-// src/services/src/utils/extend.js
-SSCD.extend = function(base, child) {
-  for (var prop in base) {
-    if (child[prop])
-      continue;
-    child[prop] = base[prop];
-  }
-  child.__inits = child.__inits || [];
-  if (base.__init__) {
-    child.__inits.push(base.__init__);
-  }
-  child.init = function() {
-    for (var i = 0; i < this.__inits.length; ++i) {
-      this.__curr_init_func = this.__inits[i];
-      this.__curr_init_func();
-    }
-    delete this.__curr_init_func;
-  };
-};
-SSCD.NotImplementedError = function(message) {
-  this.name = "NotImplementedError";
-  this.message = message || "";
-};
-SSCD.NotImplementedError.prototype = Error.prototype;
-
-// src/services/src/utils/math.js
+// src/services/src/utils/math.ts
 SSCD.Math = {};
 SSCD.Math.to_radians = function(degrees) {
   return degrees * Math.PI / 180;
@@ -5504,20 +5795,20 @@ SSCD.Math.to_degrees = function(radians) {
   return radians * 180 / Math.PI;
 };
 SSCD.Math.distance = function(p1, p2) {
-  var dx = p2.x - p1.x, dy = p2.y - p1.y;
+  let dx = p2.x - p1.x, dy = p2.y - p1.y;
   return Math.sqrt(dx * dx + dy * dy);
 };
 SSCD.Math.dist2 = function(p1, p2) {
-  var dx = p2.x - p1.x, dy = p2.y - p1.y;
+  let dx = p2.x - p1.x, dy = p2.y - p1.y;
   return dx * dx + dy * dy;
 };
 SSCD.Math.angle = function(P1, P2) {
-  var deltaY = P2.y - P1.y, deltaX = P2.x - P1.x;
+  let deltaY = P2.y - P1.y, deltaX = P2.x - P1.x;
   return Math.atan2(deltaY, deltaX) * 180 / Math.PI;
 };
 SSCD.Math.distance_to_line = function(p, v, w) {
-  var l2 = SSCD.Math.dist2(v, w);
-  var t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+  let l2 = SSCD.Math.dist2(v, w);
+  let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
   if (t < 0) {
     return SSCD.Math.distance(p, v);
   }
@@ -5530,12 +5821,12 @@ SSCD.Math.distance_to_line = function(p, v, w) {
   });
 };
 SSCD.Math.line_intersects = function(p0, p1, p2, p3) {
-  var s1_x, s1_y, s2_x, s2_y;
+  let s1_x, s1_y, s2_x, s2_y;
   s1_x = p1.x - p0.x;
   s1_y = p1.y - p0.y;
   s2_x = p3.x - p2.x;
   s2_y = p3.y - p2.y;
-  var s, t;
+  let s, t;
   s = (-s1_y * (p0.x - p2.x) + s1_x * (p0.y - p2.y)) / (-s2_x * s1_y + s1_x * s2_y);
   t = (s2_x * (p0.y - p2.y) - s2_y * (p0.x - p2.x)) / (-s2_x * s1_y + s1_x * s2_y);
   if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
@@ -5549,14 +5840,14 @@ SSCD.Math.is_on_line = function(v, l1, l2) {
 SSCD.Math.angles_dis = function(a0, a1) {
   a0 = SSCD.Math.to_radians(a0);
   a1 = SSCD.Math.to_radians(a1);
-  var max = Math.PI * 2;
-  var da = (a1 - a0) % max;
-  var distance = 2 * da % max - da;
+  let max = Math.PI * 2;
+  let da = (a1 - a0) % max;
+  let distance = 2 * da % max - da;
   distance = SSCD.Math.to_degrees(distance);
   return Math.abs(distance);
 };
 
-// src/services/src/utils/vector.js
+// src/services/src/utils/vector.ts
 SSCD.Vector = function(x, y) {
   this.x = x;
   this.y = y;
@@ -5598,7 +5889,7 @@ SSCD.Vector.prototype = {
     return this;
   },
   normalize_self: function() {
-    var by = Math.sqrt(this.x * this.x + this.y * this.y);
+    let by = Math.sqrt(this.x * this.x + this.y * this.y);
     if (by === 0)
       return this;
     this.x /= by;
@@ -5714,299 +6005,9 @@ SSCD.Vector.DOWN_LEFT = new SSCD.Vector(-1, 1);
 SSCD.Vector.UP_RIGHT = new SSCD.Vector(1, -1);
 SSCD.Vector.DOWN_RIGHT = new SSCD.Vector(1, 1);
 
-// src/services/src/world.js
-SSCD.World = function(params) {
-  this.__init_world(params);
-};
-SSCD.World.prototype = {
-  __init_world: function(params) {
-    params = params || {};
-    params.grid_size = params.grid_size || 512;
-    params.grid_error = params.grid_error !== void 0 ? params.grid_error : 2;
-    this.__grid = {};
-    this.__params = params;
-    this.__all_shapes = {};
-    this.__collision_tags = {};
-    this.__next_coll_tag = 0;
-  },
-  __create_collision_tag: function(name) {
-    if (this.__collision_tags[name]) {
-      throw new SSCD.IllegalActionError("Collision tag named '" + name + "' already exist!");
-    }
-    this.__collision_tags[name] = 1 << this.__next_coll_tag++;
-  },
-  _ALL_TAGS_VAL: Number.MAX_SAFE_INTEGER || 4294967295,
-  cleanup: function() {
-    var rows = Object.keys(this.__grid);
-    for (var _i = 0; _i < rows.length; ++_i) {
-      var i = rows[_i];
-      var columns = Object.keys(this.__grid[i]);
-      for (var _j = 0; _j < columns.length; ++_j) {
-        var j = columns[_j];
-        if (this.__grid[i][j].length === 0) {
-          delete this.__grid[i][j];
-        }
-      }
-      if (Object.keys(this.__grid[i]).length === 0) {
-        delete this.__grid[i];
-      }
-    }
-  },
-  __get_tags_value: function(tags) {
-    if (tags === void 0) {
-      return this._ALL_TAGS_VAL;
-    }
-    if (typeof tags === "string") {
-      return this.__collision_tag(tags);
-    }
-    var ret = 0;
-    for (var i = 0; i < tags.length; ++i) {
-      ret |= this.__collision_tag(tags[i]);
-    }
-    return ret;
-  },
-  __collision_tag: function(name) {
-    if (this.__collision_tags[name] === void 0) {
-      this.__create_collision_tag(name);
-    }
-    return this.__collision_tags[name];
-  },
-  __get_grid_range: function(obj) {
-    var aabb = obj.get_aabb();
-    var min_i = Math.floor(aabb.position.x / this.__params.grid_size);
-    var min_j = Math.floor(aabb.position.y / this.__params.grid_size);
-    var max_i = Math.floor((aabb.position.x + aabb.size.x) / this.__params.grid_size);
-    var max_j = Math.floor((aabb.position.y + aabb.size.y) / this.__params.grid_size);
-    return {
-      min_x: min_i,
-      min_y: min_j,
-      max_x: max_i,
-      max_y: max_j
-    };
-  },
-  add: function(obj) {
-    if (obj.__world) {
-      throw new SSCD.IllegalActionError("Object to add is already in a collision world!");
-    }
-    var grids = this.__get_grid_range(obj);
-    for (var i = grids.min_x; i <= grids.max_x; ++i) {
-      for (var j = grids.min_y; j <= grids.max_y; ++j) {
-        this.__grid[i] = this.__grid[i] || {};
-        this.__grid[i][j] = this.__grid[i][j] || [];
-        var curr_grid_chunk = this.__grid[i][j];
-        curr_grid_chunk.push(obj);
-        obj.__grid_chunks.push(curr_grid_chunk);
-      }
-    }
-    obj.__world = this;
-    obj.__grid_bounderies = grids;
-    obj.__last_insert_aabb = obj.get_aabb().clone();
-    this.__all_shapes[obj.get_id()] = obj;
-    return obj;
-  },
-  get_all_shapes: function() {
-    var ret = [];
-    for (var key in this.__all_shapes) {
-      if (this.__all_shapes.hasOwnProperty(key)) {
-        ret.push(this.__all_shapes[key]);
-      }
-    }
-    return ret;
-  },
-  remove: function(obj) {
-    if (obj.__world !== this) {
-      throw new SSCD.IllegalActionError("Object to remove is not in this collision world!");
-    }
-    for (var i = 0; i < obj.__grid_chunks.length; ++i) {
-      var grid_chunk = obj.__grid_chunks[i];
-      for (var j = 0; j < grid_chunk.length; ++j) {
-        if (grid_chunk[j] === obj) {
-          grid_chunk.splice(j, 1);
-          break;
-        }
-      }
-    }
-    delete this.__all_shapes[obj.get_id()];
-    obj.__grid_chunks = [];
-    obj.__world = null;
-    obj.__grid_bounderies = null;
-    obj.__last_insert_aabb = null;
-  },
-  __update_shape_grid: function(obj) {
-    var curr_aabb = obj.get_aabb();
-    if (this.__params.grid_error === 0 || (Math.abs(curr_aabb.position.x - obj.__last_insert_aabb.position.x) > this.__params.grid_error || Math.abs(curr_aabb.position.y - obj.__last_insert_aabb.position.y) > this.__params.grid_error || Math.abs(curr_aabb.size.x - obj.__last_insert_aabb.size.x) > this.__params.grid_error || Math.abs(curr_aabb.size.y - obj.__last_insert_aabb.size.y) > this.__params.grid_error)) {
-      this.remove(obj);
-      this.add(obj);
-    }
-  },
-  pick_object: function(obj, collision_tags) {
-    var outlist = [];
-    if (this.test_collision(obj, collision_tags, outlist, 1)) {
-      return outlist[0];
-    }
-    return null;
-  },
-  test_collision: function(obj, collision_tags, out_list, ret_objs_count) {
-    collision_tags = this.__get_tags_value(collision_tags);
-    if (obj instanceof SSCD.Vector) {
-      return this.__test_collision_point(obj, collision_tags, out_list, ret_objs_count);
-    }
-    if (obj.is_shape) {
-      return this.__test_collision_shape(obj, collision_tags, out_list, ret_objs_count);
-    }
-  },
-  test_fov: function(position, distance, direction, fov_angle, collision_tags, out_list) {
-    collision_tags = this.__get_tags_value(collision_tags);
-    out_list = out_list || [];
-    var circle = new SSCD.Circle(position, distance);
-    this.__test_collision_shape(circle, collision_tags, out_list);
-    for (var i = out_list.length - 1; i >= 0; --i) {
-      var angle = position.angle_from(out_list[i].__position);
-      if (SSCD.Math.angles_dis(direction, angle) > fov_angle) {
-        out_list.splice(i, 1);
-      }
-    }
-    return out_list.length > 0;
-  },
-  __test_collision_point: function(vector, collision_tags_val, out_list, ret_objs_count) {
-    var grid_size = this.__params.grid_size;
-    var i = Math.floor(vector.x / grid_size);
-    var j = Math.floor(vector.y / grid_size);
-    if (this.__grid[i] === void 0 || this.__grid[i][j] === void 0) {
-      return false;
-    }
-    var grid_chunk = this.__grid[i][j];
-    var found = 0;
-    for (var i = 0; i < grid_chunk.length; ++i) {
-      var curr_obj = grid_chunk[i];
-      if (!curr_obj.collision_tags_match(collision_tags_val)) {
-        continue;
-      }
-      if (this.__do_collision(curr_obj, vector)) {
-        if (out_list) {
-          found++;
-          out_list.push(curr_obj);
-          if (ret_objs_count && found >= ret_objs_count) {
-            return true;
-          }
-        } else {
-          return true;
-        }
-      }
-    }
-    return found > 0;
-  },
-  __test_collision_shape: function(obj, collision_tags_val, out_list, ret_objs_count) {
-    var grid;
-    if (obj.__world === this) {
-      grid = obj.__grid_bounderies;
-    } else {
-      grid = this.__get_grid_range(obj);
-    }
-    var found = 0;
-    var already_tests = {};
-    for (var i = grid.min_x; i <= grid.max_x; ++i) {
-      if (this.__grid[i] === void 0) {
-        continue;
-      }
-      for (var j = grid.min_y; j <= grid.max_y; ++j) {
-        var curr_grid_chunk = this.__grid[i][j];
-        if (curr_grid_chunk === void 0) {
-          continue;
-        }
-        for (var x = 0; x < curr_grid_chunk.length; ++x) {
-          var curr_obj = curr_grid_chunk[x];
-          if (curr_obj === obj) {
-            continue;
-          }
-          if (already_tests[curr_obj.get_id()]) {
-            continue;
-          }
-          already_tests[curr_obj.get_id()] = true;
-          if (!curr_obj.collision_tags_match(collision_tags_val)) {
-            continue;
-          }
-          if (this.__do_collision(curr_obj, obj)) {
-            if (out_list) {
-              found++;
-              out_list.push(curr_obj);
-              if (ret_objs_count && found >= ret_objs_count) {
-                return true;
-              }
-            } else {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return found > 0;
-  },
-  __do_collision: function(src, target) {
-    return src.test_collide_with(target);
-  },
-  render: function(canvas, camera_pos, show_grid, show_aabb) {
-    camera_pos = camera_pos || SSCD.Vector.ZERO;
-    if (show_grid === void 0) {
-      show_grid = true;
-    }
-    if (show_aabb === void 0) {
-      show_aabb = true;
-    }
-    var ctx = canvas.getContext("2d");
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    var grid_size = this.__params.grid_size;
-    var min_i = Math.floor(camera_pos.x / grid_size);
-    var min_j = Math.floor(camera_pos.y / grid_size);
-    var max_i = min_i + Math.ceil(canvas.width / grid_size);
-    var max_j = min_j + Math.ceil(canvas.height / grid_size);
-    var render_list = [];
-    for (var i = min_i; i <= max_i; ++i) {
-      for (var j = min_j; j <= max_j; ++j) {
-        var curr_grid_chunk = void 0;
-        if (this.__grid[i]) {
-          curr_grid_chunk = this.__grid[i][j];
-        }
-        if (show_grid) {
-          var position = new SSCD.Vector(i * grid_size, j * grid_size).sub_self(camera_pos);
-          ctx.beginPath();
-          ctx.rect(position.x, position.y, grid_size - 1, grid_size - 1);
-          ctx.lineWidth = "1";
-          if (curr_grid_chunk === void 0 || curr_grid_chunk.length === 0) {
-            ctx.strokeStyle = "rgba(100, 100, 100, 0.255)";
-          } else {
-            ctx.strokeStyle = "rgba(255, 0, 0, 0.3)";
-          }
-          ctx.stroke();
-        }
-        if (curr_grid_chunk === void 0) {
-          continue;
-        }
-        for (var x = 0; x < curr_grid_chunk.length; ++x) {
-          var curr_obj = curr_grid_chunk[x];
-          if (render_list.indexOf(curr_obj) === -1) {
-            render_list.push(curr_grid_chunk[x]);
-          }
-        }
-      }
-    }
-    for (var i = 0; i < render_list.length; ++i) {
-      render_list[i].render(ctx, camera_pos);
-      if (show_aabb) {
-        render_list[i].render_aabb(ctx, camera_pos);
-      }
-    }
-  }
-};
-SSCD.IllegalActionError = function(message) {
-  this.name = "Illegal Action";
-  this.message = message || "";
-};
-SSCD.IllegalActionError.prototype = Error.prototype;
-
-// src/services/src/tilemap.js
+// src/services/src/tilemap.ts
 SSCD.TilemapWorld = function(tile_size, additional_params) {
-  var params = additional_params;
+  let params = additional_params;
   params = params || {};
   params.grid_size = tile_size;
   this.__tiles = {};
@@ -6014,7 +6015,7 @@ SSCD.TilemapWorld = function(tile_size, additional_params) {
 };
 SSCD.TilemapWorld.prototype = {
   set_tile: function(index, collision, tags) {
-    var shape = this.get_tile(index);
+    let shape = this.get_tile(index);
     if (!collision) {
       if (shape) {
         this.__set_tile_shape(index, null);
@@ -6023,9 +6024,9 @@ SSCD.TilemapWorld.prototype = {
       return;
     }
     if (shape === void 0) {
-      var tilesize = this.__params.grid_size;
-      var position = index.multiply_scalar(tilesize);
-      var size = new SSCD.Vector(tilesize, tilesize);
+      let tilesize = this.__params.grid_size;
+      let position = index.multiply_scalar(tilesize);
+      let size = new SSCD.Vector(tilesize, tilesize);
       shape = this.__add_tile_shape(new SSCD.Rectangle(position, size), index);
       this.__set_tile_shape(index, shape);
     }
@@ -6036,7 +6037,7 @@ SSCD.TilemapWorld.prototype = {
   __add_tile_shape: function(obj, index) {
     this.__grid[index.x] = this.__grid[index.x] || {};
     this.__grid[index.x][index.y] = this.__grid[index.x][index.y] || [];
-    var curr_grid_chunk = this.__grid[index.x][index.y];
+    let curr_grid_chunk = this.__grid[index.x][index.y];
     curr_grid_chunk.push(obj);
     obj.__grid_chunks = [curr_grid_chunk];
     obj.__world = this;
@@ -6050,11 +6051,11 @@ SSCD.TilemapWorld.prototype = {
     return obj;
   },
   set_from_matrix: function(matrix) {
-    var index = new SSCD.Vector(0, 0);
-    for (var i = 0; i < matrix.length; ++i) {
+    let index = new SSCD.Vector(0, 0);
+    for (let i = 0; i < matrix.length; ++i) {
       index.x = 0;
-      for (var j = 0; j < matrix[i].length; ++j) {
-        this.set_tile(index, matrix[i][j]);
+      for (let j = 0; j < matrix[i].length; ++j) {
+        this.set_tile(index, matrix[i][j], null);
         index.x++;
       }
       index.y++;
@@ -6139,6 +6140,7 @@ var AxSSCDModule = class {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   AxSSCDModule,
+  SimpleCollisionDetection,
   SimpleCollisionDetectionName
 });
 //# sourceMappingURL=index.cjs.map

@@ -6,12 +6,12 @@
 // inherit base into child
 // base / child must be object's prototype (eg SSCD.something.prototype)
 // NOTE: don't use javascript built-ins so you won't mess up their prototypes.
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.extend = function(base, child) {
 
 	// copy all properties
-	for (var prop in base) {
+	for (let prop in base) {
 		if (child[prop])
 			continue;
 
@@ -29,7 +29,7 @@ SSCD.extend = function(base, child) {
 
 	// set init function
 	child.init = function() {
-		for (var i = 0; i < this.__inits.length; ++i) {
+		for (let i = 0; i < this.__inits.length; ++i) {
 			this.__curr_init_func = this.__inits[i];
 			this.__curr_init_func();
 		}

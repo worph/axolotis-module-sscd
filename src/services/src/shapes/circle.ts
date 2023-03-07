@@ -6,7 +6,7 @@
 // define the circle shape
 // @param position - center position (vector)
 // @param radius - circle radius (integer)
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.Circle = function(position, radius) {
 	// call init chain
@@ -32,7 +32,7 @@ SSCD.Circle.prototype = {
 	// @param camera_pos - optional camera position to transform the render position
 	render: function(ctx, camera_pos) {
 		// apply camera on position
-		var position = this.__position.sub(camera_pos);
+		let position = this.__position.sub(camera_pos);
 
 		// draw the circle
 		ctx.beginPath();

@@ -2,7 +2,7 @@
  * This file define the 2d vector class & utils.
  * Author: Ronen Ness, 2015
  */
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 // a 2d vector
 SSCD.Vector = function(x, y) {
@@ -71,7 +71,7 @@ SSCD.Vector.prototype = {
 
 	// normalize this vector
 	normalize_self: function() {
-		var by = Math.sqrt(this.x * this.x + this.y * this.y);
+		let by = Math.sqrt(this.x * this.x + this.y * this.y);
 		if (by === 0) return this;
 		this.x /= by;
 		this.y /= by;

@@ -2,7 +2,7 @@
  * Some useful Math functions.
  * Author: Ronen Ness, 2015
  */
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 // set namespace
 SSCD.Math = {};
@@ -19,21 +19,21 @@ SSCD.Math.to_degrees = function(radians) {
 
 // get distance between vectors
 SSCD.Math.distance = function(p1, p2) {
-	var dx = p2.x - p1.x,
+	let dx = p2.x - p1.x,
 		dy = p2.y - p1.y;
 	return Math.sqrt(dx * dx + dy * dy);
 };
 
 // get distance without sqrt
 SSCD.Math.dist2 = function(p1, p2) {
-	var dx = p2.x - p1.x,
+	let dx = p2.x - p1.x,
 		dy = p2.y - p1.y;
 	return (dx * dx + dy * dy);
 };
 
 // angle between two vectors
 SSCD.Math.angle = function(P1, P2) {
-	var deltaY = P2.y - P1.y,
+	let deltaY = P2.y - P1.y,
 		deltaX = P2.x - P1.x;
 
 	return Math.atan2(deltaY, deltaX) * 180 / Math.PI;
@@ -44,8 +44,8 @@ SSCD.Math.angle = function(P1, P2) {
 // v and w are the two edges of the line segment
 SSCD.Math.distance_to_line = function(p, v, w) {
 
-	var l2 = SSCD.Math.dist2(v, w);
-	var t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+	let l2 = SSCD.Math.dist2(v, w);
+	let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
 	if (t < 0) {
 		return SSCD.Math.distance(p, v);
 	}
@@ -62,13 +62,13 @@ SSCD.Math.distance_to_line = function(p, v, w) {
 // check if two lines intersect
 SSCD.Math.line_intersects = function(p0, p1, p2, p3) {
 
-	var s1_x, s1_y, s2_x, s2_y;
+	let s1_x, s1_y, s2_x, s2_y;
 	s1_x = p1.x - p0.x;
 	s1_y = p1.y - p0.y;
 	s2_x = p3.x - p2.x;
 	s2_y = p3.y - p2.y;
 
-	var s, t;
+	let s, t;
 	s = (-s1_y * (p0.x - p2.x) + s1_x * (p0.y - p2.y)) / (-s2_x * s1_y + s1_x * s2_y);
 	t = (s2_x * (p0.y - p2.y) - s2_y * (p0.x - p2.x)) / (-s2_x * s1_y + s1_x * s2_y);
 
@@ -98,9 +98,9 @@ SSCD.Math.angles_dis = function(a0, a1) {
 	a1 = SSCD.Math.to_radians(a1);
 
 	// get distance
-	var max = Math.PI * 2;
-	var da = (a1 - a0) % max;
-	var distance = 2 * da % max - da;
+	let max = Math.PI * 2;
+	let da = (a1 - a0) % max;
+	let distance = 2 * da % max - da;
 
 	// convert back to degrees
 	distance = SSCD.Math.to_degrees(distance);

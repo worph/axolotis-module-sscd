@@ -6,7 +6,7 @@
 // create a composite shape
 // @param position - optional starting position (vector)
 // @param objects - optional list of collision objects to start with
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.CompositeShape = function(position, objects) {
 	// call init chain
@@ -34,7 +34,7 @@ SSCD.CompositeShape.prototype = {
 
 		// add objects if provided
 		if (objects) {
-			for (var i = 0; i < objects.length; ++i) {
+			for (let i = 0; i < objects.length; ++i) {
 				this.add(objects[i]);
 			}
 		}
@@ -45,7 +45,7 @@ SSCD.CompositeShape.prototype = {
 	// @param camera_pos - optional camera position to transform the render position.
 	render: function(ctx, camera_pos) {
 		// first render all shapes
-		for (var i = 0; i < this.__shapes.length; ++i) {
+		for (let i = 0; i < this.__shapes.length; ++i) {
 			this.__shapes[i].shape.render(ctx, camera_pos);
 		}
 	},
@@ -55,9 +55,9 @@ SSCD.CompositeShape.prototype = {
 	// read base shape repel() doc for more info.
 	repel: function(obj, force, iterations, factor_self, factor_other) {
 		// do repel from independant shapes inside this composite shape
-		var ret = SSCD.Vector.ZERO.clone();
-		for (var i = 0; i < this.__shapes.length; ++i) {
-			var shape = this.__shapes[i].shape;
+		let ret = SSCD.Vector.ZERO.clone();
+		for (let i = 0; i < this.__shapes.length; ++i) {
+			let shape = this.__shapes[i].shape;
 			if (shape.test_collide_with(obj)) {
 				ret.add_self(shape.repel(obj, force, iterations, 0, factor_other));
 			}
@@ -77,7 +77,7 @@ SSCD.CompositeShape.prototype = {
 	set_debug_render_colors: function(fill_color, stroke_color) {
 		this.__override_fill_color = fill_color;
 		this.__override_stroke_color = stroke_color;
-		for (var i = 0; i < this.__shapes.length; ++i) {
+		for (let i = 0; i < this.__shapes.length; ++i) {
 			this.__shapes[i].shape.set_debug_render_colors(fill_color, stroke_color);
 		}
 	},
@@ -90,8 +90,8 @@ SSCD.CompositeShape.prototype = {
 		}
 
 		// create shapes list
-		var ret = [];
-		for (var i = 0; i < this.__shapes.length; ++i) {
+		let ret = [];
+		for (let i = 0; i < this.__shapes.length; ++i) {
 			ret.push(this.__shapes[i].shape);
 		}
 
@@ -109,9 +109,9 @@ SSCD.CompositeShape.prototype = {
 		}
 
 		// return combined aabb
-		var ret = null;
-		for (var i = 0; i < this.__shapes.length; ++i) {
-			var curr_aabb = this.__shapes[i].shape.get_aabb();
+		let ret = null;
+		for (let i = 0; i < this.__shapes.length; ++i) {
+			let curr_aabb = this.__shapes[i].shape.get_aabb();
 			if (ret) {
 				ret.expand(curr_aabb);
 			} else {
@@ -140,7 +140,7 @@ SSCD.CompositeShape.prototype = {
 		}
 
 		// store shape offset
-		var offset = shape.__position;
+		let offset = shape.__position;
 
 		// reset shapes list cache
 		this.__shapes_list_c = undefined;
@@ -171,8 +171,8 @@ SSCD.CompositeShape.prototype = {
 	// hook to call when update tags - update all child objects with new tags.
 	__update_tags_hook: function() {
 		// update all shapes about the new tags
-		for (var i = 0; i < this.__shapes; ++i) {
-			var shape = this.__shapes[i].shape;
+		for (let i = 0; i < this.__shapes; ++i) {
+			let shape = this.__shapes[i].shape;
 			shape.__collision_tags_val = this.__collision_tags_val;
 			shape.__collision_tags = this.__collision_tags;
 		}
@@ -181,7 +181,7 @@ SSCD.CompositeShape.prototype = {
 	// remove a shape.
 	remove: function(shape) {
 		this.__shapes_list_c = undefined;
-		for (var i = 0; i < this.__shapes.length; ++i) {
+		for (let i = 0; i < this.__shapes.length; ++i) {
 			if (this.__shapes[i].shape === shape) {
 				this.__shapes.splice(i, 1);
 				this.__update_parent_world();
@@ -194,7 +194,7 @@ SSCD.CompositeShape.prototype = {
 
 	// on position change - update all shapes.
 	__update_position_hook: function() {
-		for (var i = 0; i < this.__shapes.length; ++i) {
+		for (let i = 0; i < this.__shapes.length; ++i) {
 			this.__shapes[i].shape.set_position(this.__position.add(this.__shapes[i].offset));
 		}
 	}

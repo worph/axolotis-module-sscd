@@ -5,7 +5,7 @@
  */
 
 // base shape class
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.Shape = function() {};
 
@@ -34,7 +34,7 @@ SSCD.Shape.prototype = {
 	// init the general shape
 	__init__: function() {
 		// create position and set default type
-		this.__position = new SSCD.Vector();
+		this.__position = new SSCD.Vector(0,0);
 
 		// for collision-world internal usage
 		this.__grid_chunks = []; // list with world chunks this shape is in
@@ -98,7 +98,7 @@ SSCD.Shape.prototype = {
 	__update_tags_hook: null,
 
 	// return collision tag(s) (always return a list of strings)
-	get_collision_tags: function(tags) {
+	get_collision_tags: function() {
 		return this.__collision_tags;
 	},
 
@@ -143,16 +143,16 @@ SSCD.Shape.prototype = {
 		if (factor_other === undefined) factor_other = 1;
 
 		// get push vectors
-		var push_vector_other, push_vector_self;
-		var push_vector = this.get_repel_direction(obj).multiply_scalar_self(force);
+		let push_vector_other, push_vector_self;
+		let push_vector = this.get_repel_direction(obj).multiply_scalar_self(force);
 		if (factor_other) push_vector_other = push_vector.multiply_scalar(factor_other);
 		if (factor_self) push_vector_self = push_vector.multiply_scalar(factor_self * -1);
 
 		// for return value
-		var ret = SSCD.Vector.ZERO.clone();
+		let ret = SSCD.Vector.ZERO.clone();
 
 		// now do the repeling
-		var collide = true;
+		let collide = true;
 		while (collide && iterations > 0) {
 			// decreate iterations count
 			iterations--;
@@ -173,10 +173,10 @@ SSCD.Shape.prototype = {
 	// get repel direction between this shape and another shape / vector.
 	get_repel_direction: function(obj) {
 		// get the center of this object
-		var center = this.get_abs_center();
+		let center = this.get_abs_center();
 
 		// get center of other object / vector
-		var other_center;
+		let other_center;
 		if (obj instanceof SSCD.Vector) {
 			other_center = obj;
 		} else {
@@ -229,9 +229,9 @@ SSCD.Shape.prototype = {
 	// @param tags - list with collision tags.
 	// @param opacity - output color opacity.
 	__collision_tags_to_color: function(tags, opacity) {
-		var r = Math.round(Math.abs(Math.sin(tags)) * 255);
-		var g = Math.round(Math.abs(Math.cos(tags)) * 255);
-		var b = Math.round(r ^ g);
+		let r = Math.round(Math.abs(Math.sin(tags)) * 255);
+		let g = Math.round(Math.abs(Math.cos(tags)) * 255);
+		let b = Math.round(r ^ g);
 		return "rgba(" + r + "," + g + "," + b + "," + opacity + ")";
 	},
 
@@ -256,7 +256,7 @@ SSCD.Shape.prototype = {
 	// @param ctx - 2d context of a canvas.
 	// @param camera_pos - optional camera position to transform the render position.
 	render_aabb: function(ctx, camera_pos) {
-		var box = this.get_aabb();
+		let box = this.get_aabb();
 
 		// draw the rect
 		ctx.beginPath();
@@ -314,7 +314,7 @@ SSCD.Shape.prototype = {
 
 	// return the absolute center of the shape.
 	get_abs_center: function() {
-		var aabb = this.get_aabb();
+		let aabb = this.get_aabb();
 		return aabb.position.add(aabb.size.multiply_scalar(0.5));
 	},
 
@@ -336,13 +336,13 @@ SSCD.Shape.prototype = {
 	// render (for debug purposes).
 	// @param ctx - 2d context of a canvas.
 	// @param camera_pos - optional camera position to transform the render position.
-	render: function(ctx, camera_pos) {
-		throw new SSCD.NotImplementedError();
+	render: function() {
+		throw new SSCD.NotImplementedError("");
 	},
 
 	// build the shape's axis-aligned bounding box.
 	build_aabb: function() {
-		throw new SSCD.NotImplementedError();
+		throw new SSCD.NotImplementedError("");
 	},
 
 	// return the axis-aligned-bounding-box of this shape.

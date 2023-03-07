@@ -6,6 +6,7 @@ import {
 import {SimpleCollisionDetectionName} from "./Identifier";
 
 export * from "./Identifier";
+export * from "./services/simple-collision/SimpleCollisionDetection"
 
 export class AxSSCDModule implements AxModule{
     getModule(): ContainerModule {

@@ -6,7 +6,7 @@
 // define the rectangle shape
 // @param position - starting position (vector)
 // @param size - rectangle size (vector)
-import {SSCD} from "../sscdNameSpace.js"
+import {SSCD} from "../sscdNameSpace"
 
 SSCD.Rectangle = function(position, size) {
 	// call init chain
@@ -31,7 +31,7 @@ SSCD.Rectangle.prototype = {
 	// @param camera_pos - optional camera position to transform the render position
 	render: function(ctx, camera_pos) {
 		// apply camera on position
-		var position = this.__position.sub(camera_pos);
+		let position = this.__position.sub(camera_pos);
 
 		// draw the rect
 		ctx.beginPath();

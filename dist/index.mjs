@@ -6127,6 +6127,7 @@ var AxSSCDModule = class {
 };
 export {
   AxSSCDModule,
+  SSCD,
   SimpleCollisionDetection,
   SimpleCollisionDetectionName
 };

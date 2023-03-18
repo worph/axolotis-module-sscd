@@ -29,8 +29,7 @@
   },
   "dependencies": {
     "axolotis-module-definition": "https://github.com/worph/axolotis-module-definition.git",
-    "inversify": "^6.0.1",
-    "sscd": "^1.5.1"
+    "inversify": "^6.0.1"
   },
   "devDependencies": {
     "@types/jest": "^29.4.0",

@@ -4605,6 +4605,7 @@ var require_eventemitter3 = __commonJS({
 var src_exports = {};
 __export(src_exports, {
   AxSSCDModule: () => AxSSCDModule,
+  SSCD: () => SSCD,
   SimpleCollisionDetection: () => SimpleCollisionDetection,
   SimpleCollisionDetectionName: () => SimpleCollisionDetectionName
 });
@@ -6140,6 +6141,7 @@ var AxSSCDModule = class {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   AxSSCDModule,
+  SSCD,
   SimpleCollisionDetection,
   SimpleCollisionDetectionName
 });

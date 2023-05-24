@@ -1,0 +1,1 @@
+{"version":3,"sources":["../src/Identifier.ts"],"names":["SimpleCollisionDetectionName"],"mappings":"AAAO,IAAMA,EAA+B,OAAO,IAAI,8BAA8B","sourcesContent":["export const SimpleCollisionDetectionName = Symbol.for(\"SimpleCollisionDetectionName\");\r\n"]}

@@ -1,8 +1,7 @@
 import { AxModule } from 'axolotis-module-definition';
 import { ContainerModule } from 'inversify';
+export { S as SimpleCollisionDetectionName } from './Identifier-edc1fc97.js';
 import { Point2 } from 'basictypes';
-
-declare const SimpleCollisionDetectionName: unique symbol;
 
 interface SSCDBody {
     set_position(vector: any): any;
@@ -34,4 +33,4 @@ declare class AxSSCDModule implements AxModule {
     getModule(): ContainerModule;
 }
 
-export { AxSSCDModule, SSCD, SimpleCollisionDetection, SimpleCollisionDetectionName };
+export { AxSSCDModule, SSCD, SimpleCollisionDetection };

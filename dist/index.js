@@ -5,8 +5,8 @@ export { a as SSCD, b as SimpleCollisionDetection } from './chunk-RBZWLAKS.js';
 import './chunk-ON5OQYWL.js';
 import { ContainerModule } from 'inversify';
 
-var r=class{getModule(){return new ContainerModule(t=>{t(a).toDynamicValue(()=>new b).inSingletonScope();})}};
+var c=()=>new ContainerModule(r=>{r(a).toDynamicValue(()=>new b).inSingletonScope();}),n=class{getModule(){return new ContainerModule(i=>{i(a).toDynamicValue(()=>new b).inSingletonScope();})}};
 
-export { r as AxSSCDModule };
+export { n as AxSSCDModule, c as AxSSCDModuleGenerator };
 //# sourceMappingURL=out.js.map
 //# sourceMappingURL=index.js.map

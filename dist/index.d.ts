@@ -1,4 +1,4 @@
-import { AxModule } from 'axolotis-module-definition';
+import { ModuleGenerator, AxModule } from 'axolotis-module-definition';
 import { ContainerModule } from 'inversify';
 export { S as SimpleCollisionDetectionName } from './Identifier-edc1fc97.js';
 import { Point2 } from 'basictypes';
@@ -29,8 +29,9 @@ declare class SimpleCollisionDetection {
 
 declare let SSCD: any;
 
+declare const AxSSCDModuleGenerator: ModuleGenerator;
 declare class AxSSCDModule implements AxModule {
     getModule(): ContainerModule;
 }
 
-export { AxSSCDModule, SSCD, SimpleCollisionDetection };
+export { AxSSCDModule, AxSSCDModuleGenerator, SSCD, SimpleCollisionDetection };

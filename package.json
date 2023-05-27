@@ -18,8 +18,12 @@
   "types": "./dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "dist/index.d.ts": [ "dist/index.d.ts" ],
-      "*": [ "dist/*" ]
+      "dist/index.d.ts": [
+        "dist/index.d.ts"
+      ],
+      "*": [
+        "dist/*"
+      ]
     }
   },
   "exports": {
@@ -37,7 +41,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "axolotis-module-definition": "https://github.com/worph/axolotis-module-definition.git",
+    "axolotis-module-definition": "worph/axolotis-module-definition#1.0.0",
     "inversify": "^6.0.1"
   },
   "devDependencies": {

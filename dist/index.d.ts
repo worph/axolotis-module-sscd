@@ -3,27 +3,28 @@ import { ContainerModule } from 'inversify';
 export { S as SimpleCollisionDetectionName } from './Identifier-edc1fc97.js';
 import { Point2 } from 'basictypes';
 
-interface SSCDBody {
+interface SSCDBody<T> {
     set_position(vector: any): any;
     get_position(): any;
     get_aabb(): {
         position: Point2;
         size: Point2;
     };
-    get_data(): any;
-    set_data(data: any): any;
+    get_data(): T;
+    set_data(data: T): any;
 }
-declare class SimpleCollisionDetection {
+declare class SimpleCollisionDetection<T> {
     private world;
     private emitter;
     getType(): string;
     constructor();
-    onAdd(callback: (param: SSCDBody) => void): () => void;
-    onRemove(callback: (param: SSCDBody) => void): () => void;
-    register(param: SSCDBody): void;
-    unregister(param: SSCDBody): void;
-    getObjectAt({ x, y }: Point2): any;
-    getObjectIn({ x, y }: Point2, radius: any): any[];
+    onAdd(callback: (param: SSCDBody<T>) => void): () => void;
+    onRemove(callback: (param: SSCDBody<T>) => void): () => void;
+    register(param: SSCDBody<T>): void;
+    unregister(param: SSCDBody<T>): void;
+    getObjectAt({ x, y }: Point2): T;
+    getObjectsAt({ x, y }: Point2): T[];
+    getObjectIn({ x, y }: Point2, radius: any): T[];
     getWorld(): any;
 }
 

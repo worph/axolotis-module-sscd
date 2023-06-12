@@ -1,7 +1,7 @@
 import { a } from './chunk-V76TFEBC.js';
 export { a as SimpleCollisionDetectionName } from './chunk-V76TFEBC.js';
-import { b } from './chunk-RBZWLAKS.js';
-export { a as SSCD, b as SimpleCollisionDetection } from './chunk-RBZWLAKS.js';
+import { b } from './chunk-52P3EKUI.js';
+export { a as SSCD, b as SimpleCollisionDetection } from './chunk-52P3EKUI.js';
 import './chunk-ON5OQYWL.js';
 import { ContainerModule } from 'inversify';
 
